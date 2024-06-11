@@ -1,0 +1,39 @@
+# 필요한 라이브러리 로드
+library(dplyr)
+
+# CSV 파일 로드
+file_path <- "ai-crypto-project-3-live-btc-krw.csv"
+data <- read.csv(file_path)
+
+# 데이터 구조 확인
+str(data)
+head(data)
+
+# PnL 계산 함수 정의
+calculate_pnl <- function(data, price_col, quantity_col, fee_col, side_col) {
+  # PnL 계산: (종료 가격 - 시작 가격) * 포지션 크기 - 수수료
+  data <- data %>%
+    mutate(
+      entry_price = lag(price, default = first(price)),
+      exit_price = price,
+      position_size = quantity,
+      fee = ifelse(is.null(fee_col), 0, data[[fee_col]]),
+      pnl = ifelse(
+        side == "buy",
+        (exit_price - entry_price) * position_size - fee,
+        (entry_price - exit_price) * position_size - fee
+      )
+    )
+  
+  return(data)
+}
+
+# PnL 계산
+data_with_pnl <- calculate_pnl(data, price_col = "price", quantity_col = "quantity", fee_col = "fee", side_col = "side")
+
+# PnL 결과 확인
+head(data_with_pnl)
+
+# PnL 결과 저장
+output_file <- "ai-crypto-project-3-live-btc-krw-pnl.csv"
+write.csv(data_with_pnl, output_file, row.names = FALSE)
