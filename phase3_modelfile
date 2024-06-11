@@ -1,0 +1,54 @@
+library('stringr')
+library('glmnet')
+
+extract <- function(o, s) { 
+  index <- which(coef(o, s) != 0) 
+  data.frame(name=rownames(coef(o, s))[index], coef=coef(o, s)[index]) 
+}
+
+options(scipen=999)
+
+# args를 직접 설정하거나, commandArgs(TRUE)로 받아오기
+args <- c("2024-05-01T000000", "2024-05-01T235900", "upbit", "BTC", "mid5") # RStudio에서 실행 시 사용
+# args <- commandArgs(TRUE) # 터미널에서 실행 시 사용
+
+#args[1] s time
+#args[2] e time
+#args[3] exchange
+#args[4] coin symbol
+#args[5] mid5
+
+filtered = paste(args[1],args[2],args[3],args[4],'filtered-5-2',args[5],sep="-")
+model_file = paste(args[2],args[3],args[4],args[5],'lasso-5s-2std',sep='-')
+
+filtered <- str_remove_all(filtered, ":")
+model_file <- str_remove_all(model_file, ":")
+
+filtered = paste("./", filtered, ".csv", sep="")
+message(filtered)
+model_file = paste("./", model_file, ".csv", sep="")
+message(model_file)
+
+# 파일이 존재하는지 확인
+if (!file.exists(filtered)) {
+  stop(paste("File does not exist:", filtered))
+}
+
+filtered = read.csv(filtered)
+mid_std = sd(filtered$mid_price)
+message(round(mid_std, 0))
+
+filtered_no_time_mid = subset(filtered, select=-c(mid_price, timestamp))
+
+y = filtered_no_time_mid$return
+x = subset(filtered_no_time_mid, select=-c(return))
+
+x <- as.matrix(x)
+
+cv_fit <- cv.glmnet(x=x, y=y, alpha=1, intercept=FALSE, lower.limits=0, nfolds=5)
+
+fit <- glmnet(x=x, y=y, alpha=1, lambda=cv_fit$lambda.1se, intercept=FALSE, lower.limits=0)
+
+df <- extract(fit, s=0.1)
+df <- t(df)
+write.table(df, file=model_file, sep=",", col.names=FALSE, row.names=FALSE, quote=FALSE)
